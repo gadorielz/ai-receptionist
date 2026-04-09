@@ -22,27 +22,28 @@ const server = http.createServer(async (req, res) => {
 
       try {
         let sessionId = sessions[from];
-        
+
         if (!sessionId) {
-          const sessRes = await callAPI('POST', '/v1/sessions', { agent_id: AGENT_ID });
+          const sessRes = await callAPI('POST', '/v1/agents/' + AGENT_ID + '/sessions', {});
           console.log('Session response:', JSON.stringify(sessRes));
-          sessionId = sessRes.id;
+          sessionId = sessRes.session_id || sessRes.id;
           sessions[from] = sessionId;
         }
 
-        const turnPath = '/v1/sessions/' + sessionId + '/turns';
+        const turnPath = '/v1/agents/' + AGENT_ID + '/sessions/' + sessionId + '/messages';
         const turn = await callAPI('POST', turnPath, {
-          messages: [{ role: 'user', content: message }],
-          stream: false
+          message: message
         });
 
         console.log('Turn response:', JSON.stringify(turn));
 
         let reply = "Sorry, I couldn't process that.";
-        if (turn && turn.response && turn.response.content && turn.response.content.length > 0) {
-          reply = turn.response.content[0].text;
+        if (turn && turn.message) {
+          reply = turn.message;
         } else if (turn && turn.content && turn.content.length > 0) {
           reply = turn.content[0].text;
+        } else if (turn && turn.response) {
+          reply = turn.response;
         }
 
         const twiml = '<?xml version="1.0"?><Response><Message>' + reply + '</Message></Response>';
@@ -51,7 +52,7 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         console.error('Error:', e);
         res.writeHead(200, { 'Content-Type': 'text/xml' });
-        res.end('<?xml version="1.0"?><Response><Message>Sorry, something went wrong.</Message></Response>');
+        res.end('<?xml version="1.0"?><Response><Message>Error: ' + e.message + '</Message></Response>');
       }
     });
     return;
@@ -72,7 +73,7 @@ function callAPI(method, path, data) {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'agents-2025-04-15'
+        'anthropic-beta': 'interop-2025-03-01'
       }
     };
     const r = https.request(options, function(response) {
