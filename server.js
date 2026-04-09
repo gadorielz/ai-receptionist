@@ -22,15 +22,16 @@ const server = http.createServer(async (req, res) => {
 
       try {
         let sessionId = sessions[from];
+        const encodedAgent = encodeURIComponent(AGENT_ID);
 
         if (!sessionId) {
-          const sessRes = await callAPI('POST', '/v1/agents/' + AGENT_ID + '/sessions', {});
+          const sessRes = await callAPI('POST', '/v1/agents/' + encodedAgent + '/sessions', {});
           console.log('Session response:', JSON.stringify(sessRes));
           sessionId = sessRes.session_id || sessRes.id;
           sessions[from] = sessionId;
         }
 
-        const turnPath = '/v1/agents/' + AGENT_ID + '/sessions/' + sessionId + '/messages';
+        const turnPath = '/v1/agents/' + encodedAgent + '/sessions/' + sessionId + '/messages';
         const turn = await callAPI('POST', turnPath, {
           message: message
         });
