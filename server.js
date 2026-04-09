@@ -24,7 +24,7 @@ const server = http.createServer(async (req, res) => {
         let sessionId = sessions[from];
 
         if (!sessionId) {
-          const sessRes = await callAPI('POST', '/v1/sessions', { agent_id: AGENT_ID });
+          const sessRes = await callAPI('POST', '/v1/sessions', { agent: AGENT_ID });
           console.log('Session response:', JSON.stringify(sessRes));
           sessionId = sessRes.id;
           sessions[from] = sessionId;
@@ -32,7 +32,7 @@ const server = http.createServer(async (req, res) => {
 
         const eventRes = await callAPI('POST', '/v1/sessions/' + sessionId + '/events', {
           type: 'user',
-          content: [{ type: 'text', text: message }]
+          message: message
         });
 
         console.log('Event response:', JSON.stringify(eventRes));
