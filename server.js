@@ -22,29 +22,28 @@ const server = http.createServer(async (req, res) => {
 
       try {
         let sessionId = sessions[from];
-        const encodedAgent = encodeURIComponent(AGENT_ID);
 
         if (!sessionId) {
-          const sessRes = await callAPI('POST', '/v1/agents/' + encodedAgent + '/sessions', {});
+          const sessRes = await callAPI('POST', '/v1/sessions', { agent_id: AGENT_ID });
           console.log('Session response:', JSON.stringify(sessRes));
-          sessionId = sessRes.session_id || sessRes.id;
+          sessionId = sessRes.id;
           sessions[from] = sessionId;
         }
 
-        const turnPath = '/v1/agents/' + encodedAgent + '/sessions/' + sessionId + '/messages';
-        const turn = await callAPI('POST', turnPath, {
-          message: message
+        const eventRes = await callAPI('POST', '/v1/sessions/' + sessionId + '/events', {
+          type: 'user',
+          content: [{ type: 'text', text: message }]
         });
 
-        console.log('Turn response:', JSON.stringify(turn));
+        console.log('Event response:', JSON.stringify(eventRes));
 
         let reply = "Sorry, I couldn't process that.";
-        if (turn && turn.message) {
-          reply = turn.message;
-        } else if (turn && turn.content && turn.content.length > 0) {
-          reply = turn.content[0].text;
-        } else if (turn && turn.response) {
-          reply = turn.response;
+        if (eventRes && eventRes.content && eventRes.content.length > 0) {
+          reply = eventRes.content[0].text;
+        } else if (eventRes && eventRes.message) {
+          reply = eventRes.message;
+        } else if (eventRes && eventRes.text) {
+          reply = eventRes.text;
         }
 
         const twiml = '<?xml version="1.0"?><Response><Message>' + reply + '</Message></Response>';
@@ -74,7 +73,7 @@ function callAPI(method, path, data) {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'interop-2025-03-01'
+        'anthropic-beta': 'managed-agents-2026-04-01'
       }
     };
     const r = https.request(options, function(response) {
@@ -82,11 +81,8 @@ function callAPI(method, path, data) {
       response.on('data', function(c) { d += c; });
       response.on('end', function() {
         console.log('API raw response:', d);
-        try {
-          resolve(JSON.parse(d));
-        } catch(e) {
-          reject(e);
-        }
+        try { resolve(JSON.parse(d)); }
+        catch(e) { reject(e); }
       });
     });
     r.on('error', reject);
