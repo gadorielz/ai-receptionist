@@ -2,7 +2,7 @@ const http = require('http');
 const https = require('https');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const AGENT_ID = 'agent_011CZtDJYddYVd45qgZhu6Ge';
+const AGENT_ID = process.env.AGENT_ID;
 const sessions = {};
 
 const server = http.createServer(async (req, res) => {
@@ -21,26 +21,37 @@ const server = http.createServer(async (req, res) => {
       const message = params.get('Body');
 
       try {
-        if (!sessions[from]) {
+        let sessionId = sessions[from];
+        
+        if (!sessionId) {
           const sessRes = await callAPI('POST', '/v1/sessions', { agent_id: AGENT_ID });
-          sessions[from] = sessRes.id;
+          console.log('Session response:', JSON.stringify(sessRes));
+          sessionId = sessRes.id;
+          sessions[from] = sessionId;
         }
 
-        const sessionId = sessions[from];
         const turnPath = '/v1/sessions/' + sessionId + '/turns';
         const turn = await callAPI('POST', turnPath, {
           messages: [{ role: 'user', content: message }],
           stream: false
         });
 
-        const reply = (turn.response && turn.response.content && turn.response.content[0] && turn.response.content[0].text) || "Sorry, I couldn't process that.";
+        console.log('Turn response:', JSON.stringify(turn));
+
+        let reply = "Sorry, I couldn't process that.";
+        if (turn && turn.response && turn.response.content && turn.response.content.length > 0) {
+          reply = turn.response.content[0].text;
+        } else if (turn && turn.content && turn.content.length > 0) {
+          reply = turn.content[0].text;
+        }
+
         const twiml = '<?xml version="1.0"?><Response><Message>' + reply + '</Message></Response>';
         res.writeHead(200, { 'Content-Type': 'text/xml' });
         res.end(twiml);
       } catch (e) {
-        console.error(e);
-        res.writeHead(500);
-        res.end('Error');
+        console.error('Error:', e);
+        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        res.end('<?xml version="1.0"?><Response><Message>Sorry, something went wrong.</Message></Response>');
       }
     });
     return;
@@ -64,10 +75,17 @@ function callAPI(method, path, data) {
         'anthropic-beta': 'agents-2025-04-15'
       }
     };
-    const r = https.request(options, function(res) {
+    const r = https.request(options, function(response) {
       let d = '';
-      res.on('data', function(c) { d += c; });
-      res.on('end', function() { resolve(JSON.parse(d)); });
+      response.on('data', function(c) { d += c; });
+      response.on('end', function() {
+        console.log('API raw response:', d);
+        try {
+          resolve(JSON.parse(d));
+        } catch(e) {
+          reject(e);
+        }
+      });
     });
     r.on('error', reject);
     r.write(payload);
