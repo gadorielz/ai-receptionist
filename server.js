@@ -36,20 +36,18 @@ const server = http.createServer(async (req, res) => {
 
         const eventRes = await callAPI('POST', '/v1/sessions/' + sessionId + '/events', {
           type: 'user',
-          content: message
+          text: message
         });
 
         console.log('Event response:', JSON.stringify(eventRes));
 
         let reply = "Sorry, I couldn't process that.";
-        if (eventRes && eventRes.content && typeof eventRes.content === 'string') {
-          reply = eventRes.content;
-        } else if (eventRes && Array.isArray(eventRes.content) && eventRes.content.length > 0) {
-          reply = eventRes.content[0].text;
+        if (eventRes && eventRes.text) {
+          reply = eventRes.text;
+        } else if (eventRes && eventRes.content) {
+          reply = typeof eventRes.content === 'string' ? eventRes.content : eventRes.content[0].text;
         } else if (eventRes && eventRes.message) {
           reply = eventRes.message;
-        } else if (eventRes && eventRes.text) {
-          reply = eventRes.text;
         }
 
         const twiml = '<?xml version="1.0"?><Response><Message>' + reply + '</Message></Response>';
