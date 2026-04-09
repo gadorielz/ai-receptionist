@@ -27,27 +27,38 @@ const server = http.createServer(async (req, res) => {
         if (!sessionId) {
           const sessRes = await callAPI('POST', '/v1/sessions', {
             agent: AGENT_ID,
-            environment_id: ENVIRONMENT_ID
+            environment_id: ENVIRONMENT_ID,
+            title: 'WhatsApp session'
           });
           console.log('Session response:', JSON.stringify(sessRes));
           sessionId = sessRes.id;
           sessions[from] = sessionId;
         }
 
-        const eventRes = await callAPI('POST', '/v1/sessions/' + sessionId + '/events', {
-          type: 'user',
-          text: message
+        // Send event using correct format from docs
+        await callAPI('POST', '/v1/sessions/' + sessionId + '/events', {
+          events: [
+            {
+              type: 'user.message',
+              content: [{ type: 'text', text: message }]
+            }
+          ]
         });
 
-        console.log('Event response:', JSON.stringify(eventRes));
+        // Poll for response
+        await new Promise(function(r) { setTimeout(r, 3000); });
+        const eventsRes = await callAPI('GET', '/v1/sessions/' + sessionId + '/events', null);
+        console.log('Events list:', JSON.stringify(eventsRes));
 
-        let reply = "Sorry, I couldn't process that.";
-        if (eventRes && eventRes.text) {
-          reply = eventRes.text;
-        } else if (eventRes && eventRes.content) {
-          reply = typeof eventRes.content === 'string' ? eventRes.content : eventRes.content[0].text;
-        } else if (eventRes && eventRes.message) {
-          reply = eventRes.message;
+        let reply = "I received your message. One moment...";
+        if (eventsRes && eventsRes.events) {
+          const agentMsgs = eventsRes.events.filter(function(e) { return e.type === 'agent.message'; });
+          if (agentMsgs.length > 0) {
+            const last = agentMsgs[agentMsgs.length - 1];
+            if (last.content && last.content.length > 0) {
+              reply = last.content.filter(function(c) { return c.type === 'text'; }).map(function(c) { return c.text; }).join('');
+            }
+          }
         }
 
         const twiml = '<?xml version="1.0"?><Response><Message>' + reply + '</Message></Response>';
@@ -68,7 +79,7 @@ const server = http.createServer(async (req, res) => {
 
 function callAPI(method, path, data) {
   return new Promise(function(resolve, reject) {
-    const payload = JSON.stringify(data);
+    const payload = data ? JSON.stringify(data) : null;
     const options = {
       hostname: 'api.anthropic.com',
       path: path,
@@ -90,7 +101,7 @@ function callAPI(method, path, data) {
       });
     });
     r.on('error', reject);
-    r.write(payload);
+    if (payload) r.write(payload);
     r.end();
   });
 }
