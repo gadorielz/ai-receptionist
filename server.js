@@ -3,6 +3,7 @@ const https = require('https');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const AGENT_ID = process.env.AGENT_ID;
+const ENVIRONMENT_ID = process.env.ENVIRONMENT_ID;
 const sessions = {};
 
 const server = http.createServer(async (req, res) => {
@@ -24,7 +25,10 @@ const server = http.createServer(async (req, res) => {
         let sessionId = sessions[from];
 
         if (!sessionId) {
-          const sessRes = await callAPI('POST', '/v1/sessions', { agent: AGENT_ID });
+          const sessRes = await callAPI('POST', '/v1/sessions', {
+            agent: AGENT_ID,
+            environment_id: ENVIRONMENT_ID
+          });
           console.log('Session response:', JSON.stringify(sessRes));
           sessionId = sessRes.id;
           sessions[from] = sessionId;
@@ -32,13 +36,15 @@ const server = http.createServer(async (req, res) => {
 
         const eventRes = await callAPI('POST', '/v1/sessions/' + sessionId + '/events', {
           type: 'user',
-          message: message
+          content: message
         });
 
         console.log('Event response:', JSON.stringify(eventRes));
 
         let reply = "Sorry, I couldn't process that.";
-        if (eventRes && eventRes.content && eventRes.content.length > 0) {
+        if (eventRes && eventRes.content && typeof eventRes.content === 'string') {
+          reply = eventRes.content;
+        } else if (eventRes && Array.isArray(eventRes.content) && eventRes.content.length > 0) {
           reply = eventRes.content[0].text;
         } else if (eventRes && eventRes.message) {
           reply = eventRes.message;
